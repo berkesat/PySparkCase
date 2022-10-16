@@ -1,3 +1,4 @@
+from tempfile import tempdir
 import findspark
 findspark.init()
 import pyspark
@@ -12,18 +13,7 @@ spark = SparkSession.builder.master("local[*]").appName("SparkCase").config("spa
 
 spark.sql("set spark.sql.legacy.timeParserPolicy=LEGACY")
 
-    #data = "C:\Users\Berke\Desktop\SparkCase\spark-case-raw.csv"
 df  = spark.read.format("csv").option("header","true").option("delimiter",";").load("spark-case-raw.csv")
-    
-
-# tempDf = df.select(regexp_replace("Account No","'","").alias("account_no"),
-#       #to_date(col("DATE"),"dd-MMM-yy").as("date"),
-#     to_date(col("VALUE DATE"),"dd-MMM-yy").alias("valueDate"),
-#     substring("WITHDRAWAL AMT",3,12).alias("withdrawal_amt") ,
-#     substring("DEPOSIT AMT",3,12).alias("deposit_amt"),
-#     substring("BALANCE AMT",3,12).alias("balance_amt"),
-#     col("TRANSACTION DETAILS").alias("TRX"))
-
 
 tempDf2 = df.withColumn("account_no",regexp_replace("Account No","'",""))\
     .withColumn("valueDate",to_date(col("VALUE DATE"),"dd-MMM-yy"))\
@@ -85,17 +75,17 @@ tempDf2 = df.withColumn("account_no",regexp_replace("Account No","'",""))\
 
 #table12= tempDf2.select(col("account_no"),col("balance_amt"),col("deposit_amt"),col("valueMonth"),col("withdrawal_amt"),col("valueDate")).filter(col("valueMonth")===6 && col("valueYear") === 2018 && col("account_no")==="409000611074").orderBy($"valueDate".asc)
 #table12.show(100)
+# tempDf2.select("account_no","valueDate").filter((col("valueYear") == 2017) & ((col("account_no")=="409000611074")) ).show(10)
 
-windowSpec= Window.partitionBy("account_no","valueDate").orderBy("account_no")
-# windowSpec2= Window.partitionBy("account_no").orderBy("account_no")
-# balanceAtEndOfMonth =tempDf2.select("account_no",last_day("valueDate").alias("lastDay"),"balance_amt","withdrawal_amt","deposit_amt",row_number().over(windowSpec).alias("rowNum"))\
-# .filter((col("valueMonth") == 6) & (col("account_no")=="409000611074") &(col("valueYear") == 2018) & (col("valueDay") == 30) ).show()
+
+
+#How much money in balance at every account at the end of the month?
+windowSpec= Window.partitionBy("account_no","valueMonth","valueYear",).orderBy("account_no")
 balanceAtEndOfMonth =tempDf2.withColumn("rowNum",row_number().over(windowSpec))\
     .withColumn("last",last("rowNum").over(windowSpec))\
     .withColumn("lastDay",last_day("valueDate"))\
-.filter((col("rowNum")==col("last")) & ((col("account_no")=="409000611074")) & (col("valueDate")==col("lastDay")))
-
-mBalanceAtEndOfMonth = balanceAtEndOfMonth.select("account_no","valueDate","balance_amt","withdrawal_amt","deposit_amt").show(1000)
+    .filter((col("rowNum")==col("last")))
+mBalanceAtEndOfMonth = balanceAtEndOfMonth.select("account_no","valueDate","balance_amt","withdrawal_amt","deposit_amt").orderBy("valueDate","account_no").show()
 # mBalanceAtEndOfMonth = balanceAtEndOfMonth.select("account_no","balance_amt").filter(tmpbalanceAtEndOfMonth.maxRow == col("rowNum")).show()
 #filter(col("valueDate")==col("Last_Day") & col("account_no")=="409000611074" & col("valueMonth")==6)
 
