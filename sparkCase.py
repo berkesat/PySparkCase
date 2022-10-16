@@ -4,7 +4,7 @@ import pyspark
 from pyspark.sql import SparkSession
 from pyspark.context import SparkContext
 from pyspark.conf import SparkConf
-from pyspark.sql.functions import regexp_replace,to_date,substring,col,month,dayofmonth,substring_index,row_number,last_day,year,count
+from pyspark.sql.functions import regexp_replace,to_date,substring,col,month,dayofmonth,substring_index,row_number,last_day,year,count,last
 from pyspark.sql.window import Window
 from pyspark.sql.types import DoubleType,IntegerType,BooleanType,DateType
 
@@ -53,8 +53,8 @@ tempDf2 = df.withColumn("account_no",regexp_replace("Account No","'",""))\
 
 
 #Data Based- Monthly - Daily - TRX,SUM,AVG
-table1 = tempDf2.groupBy("valueMonth").agg(count("withdrawal_amt"),count("deposit_amt")).orderBy(col("valueMonth").asc())
-table1.show()
+# table1 = tempDf2.groupBy("valueMonth").agg(count("withdrawal_amt"),count("deposit_amt")).orderBy(col("valueMonth").asc())
+# table1.show()
 #val table2 = tempDf2.groupBy("valueDay").agg(count("withdrawal_amt"), count("deposit_amt")).orderBy(col("valueDay").asc())
 #table2.show()
 #val table3= tempDf2.groupBy("valueMonth").sum("withdrawal_amt","deposit_amt").orderBy(col("valueMonth").asc())
@@ -86,10 +86,18 @@ table1.show()
 #table12= tempDf2.select(col("account_no"),col("balance_amt"),col("deposit_amt"),col("valueMonth"),col("withdrawal_amt"),col("valueDate")).filter(col("valueMonth")===6 && col("valueYear") === 2018 && col("account_no")==="409000611074").orderBy($"valueDate".asc)
 #table12.show(100)
 
-# windowSpec= Window.partitionBy("account_no","valueMonth").orderBy("account_no")
-# table15 = tempDf2.select(col("account_no"),col("valueDate"),col("valueMonth"),col("balance_amt"),last_day(col("valueDate")).alias("Last_Day")).filter(col("valueDate")==col("Last_Day") & col("account_no")=="409000611074" & col("valueMonth")== 6)
-# table15.select(col("account_no"),row_number().over(windowSpec).alias("rank"),col("balance_amt"),max("rank"))
+windowSpec= Window.partitionBy("account_no","valueDate").orderBy("account_no")
+# windowSpec2= Window.partitionBy("account_no").orderBy("account_no")
+# balanceAtEndOfMonth =tempDf2.select("account_no",last_day("valueDate").alias("lastDay"),"balance_amt","withdrawal_amt","deposit_amt",row_number().over(windowSpec).alias("rowNum"))\
+# .filter((col("valueMonth") == 6) & (col("account_no")=="409000611074") &(col("valueYear") == 2018) & (col("valueDay") == 30) ).show()
+balanceAtEndOfMonth =tempDf2.withColumn("rowNum",row_number().over(windowSpec))\
+    .withColumn("last",last("rowNum").over(windowSpec))\
+    .withColumn("lastDay",last_day("valueDate"))\
+.filter((col("rowNum")==col("last")) & ((col("account_no")=="409000611074")) & (col("valueDate")==col("lastDay")))
 
+mBalanceAtEndOfMonth = balanceAtEndOfMonth.select("account_no","valueDate","balance_amt","withdrawal_amt","deposit_amt").show(1000)
+# mBalanceAtEndOfMonth = balanceAtEndOfMonth.select("account_no","balance_amt").filter(tmpbalanceAtEndOfMonth.maxRow == col("rowNum")).show()
+#filter(col("valueDate")==col("Last_Day") & col("account_no")=="409000611074" & col("valueMonth")==6)
 
 
 #val table16 = table15.groupBy("account_no","balance_amt").agg(last(col("Last_Day")))
